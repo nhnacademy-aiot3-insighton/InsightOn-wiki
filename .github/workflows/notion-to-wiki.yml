@@ -2,8 +2,10 @@ name: Notion to GitHub Wiki Sync
 
 on:
   schedule:
-    # 매일 00:00 UTC = 한국시간 오전 9시. 필요하면 cron 값만 바꾸세요.
-    - cron: '0 0 * * *'
+    # 10분마다 실행 — Notion Meetings DB에서 "Wiki 동기화" 버튼을 누르면
+    # 최대 10분 내에 GitHub 이슈 등록 + Wiki 반영까지 처리됩니다.
+    # (GitHub Actions 스케줄은 부하가 몰리면 몇 분 늦게 실행될 수 있습니다)
+    - cron: '*/10 * * * *'
   workflow_dispatch: {}  # Actions 탭에서 수동 실행 버튼도 생김
 
 jobs:
@@ -20,6 +22,13 @@ jobs:
 
       - name: 의존성 설치
         run: npm install @notionhq/client notion-to-md
+
+      - name: "Wiki 동기화" 버튼 눌린 회의 -> GitHub 이슈 등록
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+          GITHUB_ISSUE_TOKEN: ${{ secrets.WIKI_SYNC_PAT }}
+        run: node scripts/create-issues-for-requested.js
 
       - name: Notion 문서 -> Markdown 변환
         env:
