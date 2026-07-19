@@ -1,0 +1,53 @@
+name: Notion to GitHub Wiki Sync
+
+on:
+  schedule:
+    # 매일 00:00 UTC = 한국시간 오전 9시. 필요하면 cron 값만 바꾸세요.
+    - cron: '0 0 * * *'
+  workflow_dispatch: {}  # Actions 탭에서 수동 실행 버튼도 생김
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 의존성 설치
+        run: npm install @notionhq/client notion-to-md
+
+      - name: Notion 문서 -> Markdown 변환
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+          OUTPUT_DIR: wiki-sync-output
+        run: node scripts/sync-notion-to-wiki.js
+
+      - name: GitHub Wiki에 반영
+        env:
+          WIKI_PAT: ${{ secrets.WIKI_SYNC_PAT }}
+        run: |
+          set -e
+          REPO="${{ github.repository }}"
+          git clone "https://x-access-token:${WIKI_PAT}@github.com/${REPO}.wiki.git" wiki-repo
+
+          # 새로 생성된 문서를 wiki 저장소로 복사 (기존 수동 작성 페이지는 덮어쓰지 않도록
+          # 파일명이 겹치지 않게 관리하는 걸 권장합니다)
+          cp -r wiki-sync-output/* wiki-repo/
+
+          cd wiki-repo
+          git config user.name "notion-sync-bot"
+          git config user.email "actions@github.com"
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "변경된 내용이 없습니다."
+          else
+            git commit -m "docs: Notion 문서 자동 동기화 ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git push
+          fi
