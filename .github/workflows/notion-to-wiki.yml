@@ -23,7 +23,7 @@ jobs:
       - name: 의존성 설치
         run: npm install @notionhq/client notion-to-md
 
-      - name: "Wiki 동기화" 버튼 눌린 회의 -> GitHub 이슈 등록
+      - name: Wiki 동기화 버튼 눌린 회의 -> GitHub 이슈 등록
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
