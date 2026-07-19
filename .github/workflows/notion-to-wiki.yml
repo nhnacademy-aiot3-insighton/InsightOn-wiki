@@ -37,6 +37,12 @@ jobs:
           OUTPUT_DIR: wiki-sync-output
         run: node scripts/sync-notion-to-wiki.js
 
+      - name: Scrum 라벨 이슈 -> 회의록.md 생성
+        env:
+          GITHUB_ISSUE_TOKEN: ${{ secrets.WIKI_SYNC_PAT }}
+          OUTPUT_DIR: wiki-sync-output
+        run: node scripts/generate-meeting-log.js
+
       - name: GitHub Wiki에 반영
         env:
           WIKI_PAT: ${{ secrets.WIKI_SYNC_PAT }}

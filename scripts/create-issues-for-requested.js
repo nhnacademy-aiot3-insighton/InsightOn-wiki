@@ -62,6 +62,32 @@ function getUrlValue(page, propName) {
     return prop?.type === "url" && prop.url ? prop.url : "";
 }
 
+function getSelectValue(page, propName) {
+    const prop = page.properties?.[propName];
+    return prop?.type === "select" && prop.select ? prop.select.name : "";
+}
+
+function getDateValue(page, propName) {
+    const prop = page.properties?.[propName];
+    return prop?.type === "date" && prop.date ? prop.date.start : "";
+}
+
+function getPersonName(page, propName) {
+    const prop = page.properties?.[propName];
+    if (prop?.type === "people" && prop.people?.length > 0) {
+        return prop.people[0].name || "";
+    }
+    return "";
+}
+
+// Meeting type -> GitHub 라벨 매핑 ("Scrum"은 회의록 자동 생성 스크립트가 찾는 공통 라벨)
+const MEETING_TYPE_LABELS = {
+    DailyScrum: ["Scrum", "DailyScrum"],
+    WeeklyMeeting: ["Scrum", "WeeklyMeeting"],
+    TeamMeeting: ["Scrum", "TeamMeeting"],
+    EmergencyMeeting: ["Scrum", "EmergencyMeeting"],
+};
+
 // Repository 프로퍼티(예: https://github.com/owner/repo)에서 "owner/repo" 파싱
 function parseOwnerRepo(repoUrl) {
     if (!repoUrl) return null;
@@ -87,7 +113,38 @@ async function findRequestedPages() {
     return results;
 }
 
-async function createGithubIssue(ownerRepo, title, body) {
+async function ensureLabelsExist(ownerRepo, labels) {
+    // 라벨이 레포에 없으면 이슈 생성 시 GitHub가 자동으로 만들어주지 않으므로 미리 생성해둠.
+    for (const name of labels) {
+        const res = await fetch(
+            `https://api.github.com/repos/${ownerRepo}/labels/${encodeURIComponent(name)}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${GITHUB_ISSUE_TOKEN}`,
+                    Accept: "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+            }
+        );
+        if (res.status === 404) {
+            await fetch(`https://api.github.com/repos/${ownerRepo}/labels`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${GITHUB_ISSUE_TOKEN}`,
+                    Accept: "application/vnd.github+json",
+                    "Content-Type": "application/json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                body: JSON.stringify({ name, color: "6f42c1" }),
+            });
+        }
+    }
+}
+
+async function createGithubIssue(ownerRepo, title, body, labels) {
+    if (labels?.length) {
+        await ensureLabelsExist(ownerRepo, labels);
+    }
     const res = await fetch(`https://api.github.com/repos/${ownerRepo}/issues`, {
         method: "POST",
         headers: {
@@ -96,7 +153,7 @@ async function createGithubIssue(ownerRepo, title, body) {
             "Content-Type": "application/json",
             "X-GitHub-Api-Version": "2022-11-28",
         },
-        body: JSON.stringify({ title, body }),
+        body: JSON.stringify({ title, body, labels: labels || [] }),
     });
     if (!res.ok) {
         const text = await res.text();
@@ -168,13 +225,22 @@ async function main() {
             continue;
         }
 
+        const meetingType = getSelectValue(page, "Meeting type");
+        const date = getDateValue(page, "Date");
+        const scrumMaster = getPersonName(page, "ScrumMaster");
+        const labels = MEETING_TYPE_LABELS[meetingType] || ["Scrum"];
+
         const mdBlocks = await n2m.pageToMarkdown(page.id);
         const mdString = n2m.toMarkdownString(mdBlocks).parent || "";
-        const body =
-            `> Notion에서 자동 등록된 이슈입니다. 원본: ${page.url}\n\n` + mdString;
+        const metaLines = [
+            `> Notion에서 자동 등록된 이슈입니다. 원본: ${page.url}`,
+            `- **날짜**: ${date || "-"}`,
+            `- **스크럼마스터**: ${scrumMaster || "-"}`,
+        ].join("\n");
+        const body = `${metaLines}\n\n${mdString}`;
 
         try {
-            const issue = await createGithubIssue(ownerRepo, title, body);
+            const issue = await createGithubIssue(ownerRepo, title, body, labels);
             console.log(`  - "${title}" -> ${ownerRepo}#${issue.number} 이슈 생성 완료`);
 
             const parsedProject = parseProjectUrl(PROJECT_URL);
