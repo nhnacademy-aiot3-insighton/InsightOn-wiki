@@ -30,13 +30,6 @@ jobs:
           GITHUB_ISSUE_TOKEN: ${{ secrets.WIKI_SYNC_PAT }}
         run: node scripts/create-issues-for-requested.js
 
-      - name: Notion 문서 -> Markdown 변환
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
-          OUTPUT_DIR: wiki-sync-output
-        run: node scripts/sync-notion-to-wiki.js
-
       - name: Scrum 라벨 이슈 -> 회의록.md 생성
         env:
           GITHUB_ISSUE_TOKEN: ${{ secrets.WIKI_SYNC_PAT }}
