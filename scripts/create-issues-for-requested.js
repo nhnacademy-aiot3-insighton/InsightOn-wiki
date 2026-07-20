@@ -71,8 +71,8 @@ async function findRequestedPages() {
 
     do {
         console.log("  - Notion 페이지 조회 중...");
-        const res = await notion.databases.query({
-            database_id: DATABASE_ID,
+        const res = await notion.dataSources.query({
+            data_source_id: DATABASE_ID,
             start_cursor: cursor,
             filter: {
                 property: SYNC_PROPERTY,
