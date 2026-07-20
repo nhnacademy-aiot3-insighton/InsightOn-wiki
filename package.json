@@ -1,0 +1,29 @@
+{
+  "type": "module",
+  "name": "insighton-wiki-sync",
+  "version": "1.0.0",
+  "description": "Notion to GitHub Wiki Sync - Automates meeting notes and issue tracking",
+  "main": "scripts/sync-notion-to-wiki.js",
+  "scripts": {
+    "sync": "node scripts/sync-notion-to-wiki.js",
+    "create-issues": "node scripts/create-issues-for-requested.js",
+    "generate:meeting-log": "node scripts/generate-meeting-log.js",
+    "workflow": "npm run create-issues && npm run generate:meeting-log && npm run sync"
+  },
+  "keywords": [
+    "notion",
+    "github",
+    "wiki",
+    "automation",
+    "scrum"
+  ],
+  "author": "InsightOn Team",
+  "license": "MIT",
+  "dependencies": {
+    "@notionhq/client": "^2.2.0",
+    "notion-to-md": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
