@@ -18,7 +18,7 @@ jobs:
           node-version: '20'
 
       - name: 의존성 설치
-        run: npm install @notionhq/client notion-to-md
+        run: npm ci
 
       - name: Wiki 동기화 버튼 눌린 회의 -> GitHub 이슈 등록
         env:
