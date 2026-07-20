@@ -65,7 +65,7 @@ async function fetchAllPages(dataSourceId) {
         pageCount++;
         console.log(`  - Notion 페이지 조회 중 (배치 ${pageCount})...`);
         const res = await fetchWithRetry(
-            async () => await notion.dataSources.query({ data_source_id: dataSourceId, start_cursor: cursor }),
+            async () => await notion.databases.query({ data_source_id: dataSourceId, start_cursor: cursor }),
             `Notion 데이터소스 조회 (배치 ${pageCount})`
         );
         results.push(...res.results);

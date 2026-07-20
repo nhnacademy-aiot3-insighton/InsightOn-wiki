@@ -4,14 +4,14 @@ import { NotionToMarkdown } from "notion-to-md";
 const PROJECT_URL = "https://github.com/orgs/nhnacademy-aiot3-insighton/projects/1";
 
 const NOTION_TOKEN = process.env.NOTION_TOKEN;
-const DATA_SOURCE_ID = process.env.NOTION_DATA_SOURCE_ID;
-const GITHUB_ISSUE_TOKEN = process.env.WIKI_SYNC_PAT || process.env.GITHUB_ISSUE_TOKEN;
+const DATABASE_ID = process.env.NOTION_DATA_SOURCE_ID;
+const WIKI_SYNC_PAT = process.env.WIKI_SYNC_PAT;
 const DEFAULT_ISSUE_REPO = process.env.DEFAULT_ISSUE_REPO || process.env.GITHUB_REPOSITORY || "";
 
 const SYNC_PROPERTY = "Wiki 동기화";
 
-if (!NOTION_TOKEN || !DATA_SOURCE_ID || !GITHUB_ISSUE_TOKEN) {
-    console.error("NOTION_TOKEN, NOTION_DATA_SOURCE_ID, GITHUB_ISSUE_TOKEN 환경변수가 필요합니다.");
+if (!NOTION_TOKEN || !DATABASE_ID || !WIKI_SYNC_PAT) {
+    console.error("❌ NOTION_TOKEN, NOTION_DATA_SOURCE_ID, WIKI_SYNC_PAT 환경변수 필수");
     process.exit(1);
 }
 
@@ -64,34 +64,24 @@ function parseOwnerRepo(repoUrl) {
     return m ? `${m[1]}/${m[2]}` : null;
 }
 
+// ✅ 수정됨: databases.query 사용 (Notion SDK v4+ 표준 방식)
 async function findRequestedPages() {
     const results = [];
     let cursor = undefined;
 
-    try {
-        // Notion SDK v5+ 호환: dataSources.query 사용
-        do {
-            console.log("  - Notion 페이지 조회 중...");
-            const res = await notion.dataSources.query({
-                data_source_id: DATA_SOURCE_ID,
-                start_cursor: cursor,
-                filter: {
-                    property: SYNC_PROPERTY,
-                    checkbox: { equals: true },
-                },
-            });
-            results.push(...res.results);
-            cursor = res.has_more ? res.next_cursor : undefined;
-        } while (cursor);
-    } catch (err) {
-        // 폴백: 기존 방식 시도 (SDK 버전이 다를 경우)
-        if (err.message?.includes("dataSources")) {
-            console.warn("⚠️  dataSources.query 실패, 대체 방식 시도...");
-            console.error("Notion SDK 버전을 확인하세요. v5+ 필요합니다.");
-            throw new Error("Notion SDK 버전이 맞지 않습니다. npm install @notionhq/client@latest 실행하세요.");
-        }
-        throw err;
-    }
+    do {
+        console.log("  - Notion 페이지 조회 중...");
+        const res = await notion.databases.query({
+            database_id: DATABASE_ID,
+            start_cursor: cursor,
+            filter: {
+                property: SYNC_PROPERTY,
+                checkbox: { equals: true },
+            },
+        });
+        results.push(...res.results);
+        cursor = res.has_more ? res.next_cursor : undefined;
+    } while (cursor);
 
     return results;
 }
@@ -103,7 +93,7 @@ async function ensureLabelsExist(ownerRepo, labels) {
                 `https://api.github.com/repos/${ownerRepo}/labels/${encodeURIComponent(name)}`,
                 {
                     headers: {
-                        Authorization: `Bearer ${GITHUB_ISSUE_TOKEN}`,
+                        Authorization: `Bearer ${WIKI_SYNC_PAT}`,
                         Accept: "application/vnd.github+json",
                         "X-GitHub-Api-Version": "2022-11-28",
                     },
@@ -113,7 +103,7 @@ async function ensureLabelsExist(ownerRepo, labels) {
                 await fetch(`https://api.github.com/repos/${ownerRepo}/labels`, {
                     method: "POST",
                     headers: {
-                        Authorization: `Bearer ${GITHUB_ISSUE_TOKEN}`,
+                        Authorization: `Bearer ${WIKI_SYNC_PAT}`,
                         Accept: "application/vnd.github+json",
                         "Content-Type": "application/json",
                         "X-GitHub-Api-Version": "2022-11-28",
@@ -122,7 +112,7 @@ async function ensureLabelsExist(ownerRepo, labels) {
                 });
             }
         } catch (err) {
-            console.warn(`  ⚠️  라벨 "${name}" 생성 실패: ${err.message}`);
+            console.warn(`  ⚠️  라벨 "${name}" 생성 실패`);
         }
     }
 }
@@ -134,7 +124,7 @@ async function createGithubIssue(ownerRepo, title, body, labels) {
     const res = await fetch(`https://api.github.com/repos/${ownerRepo}/issues`, {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${GITHUB_ISSUE_TOKEN}`,
+            Authorization: `Bearer ${WIKI_SYNC_PAT}`,
             Accept: "application/vnd.github+json",
             "Content-Type": "application/json",
             "X-GitHub-Api-Version": "2022-11-28",
@@ -143,7 +133,7 @@ async function createGithubIssue(ownerRepo, title, body, labels) {
     });
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(`GitHub 이슈 생성 실패 (${ownerRepo}): ${res.status} ${text}`);
+        throw new Error(`GitHub 이슈 생성 실패: ${res.status}`);
     }
     return res.json();
 }
@@ -152,14 +142,14 @@ async function githubGraphql(query, variables) {
     const res = await fetch("https://api.github.com/graphql", {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${GITHUB_ISSUE_TOKEN}`,
+            Authorization: `Bearer ${WIKI_SYNC_PAT}`,
             "Content-Type": "application/json",
         },
         body: JSON.stringify({ query, variables }),
     });
     const json = await res.json();
     if (!res.ok || json.errors) {
-        throw new Error(`GitHub GraphQL 오류: ${JSON.stringify(json.errors || json)}`);
+        throw new Error(`GitHub GraphQL 오류`);
     }
     return json.data;
 }
@@ -178,9 +168,7 @@ async function getProjectNodeId({ ownerType, login, number }) {
             : `query($login:String!,$number:Int!){ user(login:$login){ projectV2(number:$number){ id } } }`;
     const data = await githubGraphql(query, { login, number });
     const proj = ownerType === "orgs" ? data.organization?.projectV2 : data.user?.projectV2;
-    if (!proj) {
-        throw new Error(`프로젝트를 찾을 수 없습니다`);
-    }
+    if (!proj) throw new Error("프로젝트 없음");
     return proj.id;
 }
 
@@ -192,7 +180,7 @@ async function addIssueToProject(projectNodeId, issueNodeId) {
 async function main() {
     console.log("🔍 Notion에서 Wiki 동기화 요청 찾는 중...");
     const pages = await findRequestedPages();
-    console.log(`✅ Wiki 동기화 요청된 문서 ${pages.length}건 발견.`);
+    console.log(`✅ ${pages.length}건 발견`);
 
     for (const page of pages) {
         const title = getTitle(page);
@@ -200,7 +188,7 @@ async function main() {
         const ownerRepo = parseOwnerRepo(repoUrl) || DEFAULT_ISSUE_REPO;
 
         if (!ownerRepo) {
-            console.warn(`  ⚠️  "${title}": Repository 프로퍼티가 비어있습니다.`);
+            console.warn(`  ⚠️  "${title}": Repository 비어있음`);
             continue;
         }
 
@@ -221,16 +209,16 @@ async function main() {
             const body = `${metaLines}\n\n${mdString}`;
 
             const issue = await createGithubIssue(ownerRepo, title, body, labels);
-            console.log(`     ✅ ${ownerRepo}#${issue.number} 이슈 생성`);
+            console.log(`     ✅ #${issue.number} 이슈 생성`);
 
             const parsedProject = parseProjectUrl(PROJECT_URL);
             if (parsedProject) {
                 try {
                     const projectNodeId = await getProjectNodeId(parsedProject);
                     await addIssueToProject(projectNodeId, issue.node_id);
-                    console.log(`     ✅ 칸반보드에 등록`);
+                    console.log(`     ✅ 칸반보드 등록`);
                 } catch (projErr) {
-                    console.warn(`     ⚠️  칸반보드 등록 실패: ${projErr.message}`);
+                    console.warn(`     ⚠️  칸반보드 등록 실패`);
                 }
             }
 
@@ -242,11 +230,11 @@ async function main() {
                 },
             });
         } catch (err) {
-            console.error(`  ❌ "${title}" 처리 실패: ${err.message}`);
+            console.error(`  ❌ "${title}" 실패: ${err.message}`);
         }
     }
 
-    console.log("✅ 이슈 등록 처리 완료.");
+    console.log("✅ 완료");
 }
 
 main().catch((err) => {
