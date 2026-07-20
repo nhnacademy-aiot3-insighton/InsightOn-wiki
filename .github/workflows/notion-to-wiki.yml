@@ -24,12 +24,12 @@ jobs:
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
-          GITHUB_ISSUE_TOKEN: ${{ secrets.WIKI_SYNC_PAT }}
+          WIKI_SYNC_PAT: ${{ secrets.WIKI_SYNC_PAT }}
         run: node scripts/create-issues-for-requested.js
 
       - name: Scrum 라벨 이슈 -> 회의록.md 생성
         env:
-          GITHUB_ISSUE_TOKEN: ${{ secrets.WIKI_SYNC_PAT }}
+          WIKI_SYNC_PAT: ${{ secrets.WIKI_SYNC_PAT }}
           ISSUE_REPO: ${{ github.repository }}
           OUTPUT_DIR: wiki-sync-output
         run: node scripts/generate-meeting-log.js

@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 
-const GITHUB_ISSUE_TOKEN = process.env.GITHUB_ISSUE_TOKEN;
+const GITHUB_ISSUE_TOKEN = process.env.WIKI_SYNC_PAT || process.env.GITHUB_ISSUE_TOKEN;
 const ISSUE_REPO = process.env.ISSUE_REPO || process.env.GITHUB_REPOSITORY || "";
 const OUTPUT_DIR = process.env.OUTPUT_DIR || "wiki-sync-output";
 
