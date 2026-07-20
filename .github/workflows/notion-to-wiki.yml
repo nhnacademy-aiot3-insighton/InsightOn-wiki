@@ -2,8 +2,11 @@ name: Notion to GitHub Wiki Sync
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
-  workflow_dispatch: {}
+    # 10분마다 실행 — Notion Meetings DB에서 "Wiki 동기화" 버튼을 누르면
+    # 최대 10분 내에 GitHub 이슈 등록 + Wiki 반영까지 처리됩니다.
+    # (GitHub Actions 스케줄은 부하가 몰리면 몇 분 늦게 실행될 수 있습니다)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}  # Actions 탭에서 수동 실행 버튼도 생김
 
 jobs:
   sync:
@@ -18,28 +21,20 @@ jobs:
           node-version: '20'
 
       - name: 의존성 설치
-        run: npm ci
+        run: npm install @notionhq/client notion-to-md
 
       - name: Wiki 동기화 버튼 눌린 회의 -> GitHub 이슈 등록
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
-          WIKI_SYNC_PAT: ${{ secrets.WIKI_SYNC_PAT }}
+          GITHUB_ISSUE_TOKEN: ${{ secrets.WIKI_SYNC_PAT }}
         run: node scripts/create-issues-for-requested.js
 
       - name: Scrum 라벨 이슈 -> 회의록.md 생성
         env:
-          WIKI_SYNC_PAT: ${{ secrets.WIKI_SYNC_PAT }}
-          ISSUE_REPO: ${{ github.repository }}
+          GITHUB_ISSUE_TOKEN: ${{ secrets.WIKI_SYNC_PAT }}
           OUTPUT_DIR: wiki-sync-output
         run: node scripts/generate-meeting-log.js
-
-      - name: Notion 회의 DB -> Wiki 문서 동기화
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
-          OUTPUT_DIR: wiki-sync-output
-        run: node scripts/sync-notion-to-wiki.js
 
       - name: GitHub Wiki에 반영
         env:
@@ -48,15 +43,19 @@ jobs:
           set -e
           REPO="${{ github.repository }}"
           git clone "https://x-access-token:${WIKI_PAT}@github.com/${REPO}.wiki.git" wiki-repo
+
+          # 새로 생성된 문서를 wiki 저장소로 복사 (기존 수동 작성 페이지는 덮어쓰지 않도록
+          # 파일명이 겹치지 않게 관리하는 걸 권장합니다)
           cp -r wiki-sync-output/* wiki-repo/
+
           cd wiki-repo
           git config user.name "notion-sync-bot"
           git config user.email "actions@github.com"
           git add .
+
           if git diff --cached --quiet; then
-            echo "✅ 변경된 내용이 없습니다."
+            echo "변경된 내용이 없습니다."
           else
             git commit -m "docs: Notion 문서 자동 동기화 ($(date -u +'%Y-%m-%d %H:%M UTC'))"
             git push
-            echo "✅ Wiki에 반영 완료"
           fi
