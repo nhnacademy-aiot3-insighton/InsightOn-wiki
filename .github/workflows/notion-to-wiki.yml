@@ -2,10 +2,10 @@ name: Notion to GitHub Wiki Sync
 
 on:
   schedule:
-    # 10분마다 실행 — Notion Meetings DB에서 "Wiki 동기화" 버튼을 누르면
-    # 최대 10분 내에 GitHub 이슈 등록 + Wiki 반영까지 처리됩니다.
+    # 30분마다 실행 — Notion Meetings DB에서 "Wiki 동기화" 버튼을 누르면
+    # 최대 30분 내에 GitHub 이슈 등록 + Wiki 반영까지 처리됩니다.
     # (GitHub Actions 스케줄은 부하가 몰리면 몇 분 늦게 실행될 수 있습니다)
-    - cron: '*/10 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch: {}  # Actions 탭에서 수동 실행 버튼도 생김
 
 jobs:
